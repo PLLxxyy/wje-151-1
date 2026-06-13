@@ -10,7 +10,7 @@ const statusLabels: Record<OrderStatus, { text: string; className: string }> = {
   cancelled: { text: '已取消', className: 'status-cancelled' },
 };
 
-type TabKey = 'pending' | 'in-progress' | 'completed';
+type TabKey = 'pending' | 'in-progress' | 'completed' | 'cancelled';
 
 export default function AuntDashboard() {
   const navigate = useNavigate();
@@ -18,7 +18,6 @@ export default function AuntDashboard() {
   const [tick, setTick] = useState(0);
 
   const allOrders = getOrders().sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  // tick is used to force re-read from localStorage
   void tick;
   const orders = allOrders.filter((o) => o.status === tab);
 
@@ -40,7 +39,34 @@ export default function AuntDashboard() {
     { key: 'pending', label: '待接单' },
     { key: 'in-progress', label: '服务中' },
     { key: 'completed', label: '已完成' },
+    { key: 'cancelled', label: '已取消' },
   ];
+
+  const emptyText = () => {
+    switch (tab) {
+      case 'pending':
+        return '暂无待接订单';
+      case 'in-progress':
+        return '暂无进行中的服务';
+      case 'completed':
+        return '暂无已完成的订单';
+      case 'cancelled':
+        return '暂无已取消的订单';
+    }
+  };
+
+  const emptyIcon = () => {
+    switch (tab) {
+      case 'pending':
+        return '📭';
+      case 'in-progress':
+        return '🔧';
+      case 'completed':
+        return '✅';
+      case 'cancelled':
+        return '❌';
+    }
+  };
 
   return (
     <div>
@@ -64,10 +90,8 @@ export default function AuntDashboard() {
       <div style={{ padding: 16 }}>
         {orders.length === 0 ? (
           <div className="empty-state">
-            <div className="empty-icon">{tab === 'pending' ? '📭' : tab === 'in-progress' ? '🔧' : '✅'}</div>
-            <div className="empty-text">
-              {tab === 'pending' ? '暂无待接订单' : tab === 'in-progress' ? '暂无进行中的服务' : '暂无已完成的订单'}
-            </div>
+            <div className="empty-icon">{emptyIcon()}</div>
+            <div className="empty-text">{emptyText()}</div>
           </div>
         ) : (
           orders.map((order) => {
@@ -92,6 +116,11 @@ export default function AuntDashboard() {
                   {order.remark && (
                     <div className="order-detail" style={{ color: 'var(--warning)' }}>
                       💬 备注：{order.remark}
+                    </div>
+                  )}
+                  {order.status === 'cancelled' && order.cancelReason && (
+                    <div className="order-detail" style={{ color: 'var(--danger)', marginTop: 6 }}>
+                      ❌ 取消原因：{order.cancelReason}
                     </div>
                   )}
                 </div>

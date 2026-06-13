@@ -68,6 +68,8 @@ export interface Order {
   rating?: number;
   review?: string;
   reviewedAt?: string;
+  cancelReason?: string;
+  cancelledAt?: string;
 }
 
 export interface Review {
