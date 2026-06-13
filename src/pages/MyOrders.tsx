@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useState, useMemo } from 'react';
-import { getOrders, updateOrder } from '../utils/storage';
+import { getOrders, updateOrder, getOrderById } from '../utils/storage';
 import { Order, OrderStatus } from '../types';
 
 const statusLabels: Record<OrderStatus, { text: string; className: string }> = {
@@ -8,6 +8,13 @@ const statusLabels: Record<OrderStatus, { text: string; className: string }> = {
   'in-progress': { text: '服务中', className: 'status-in-progress' },
   completed: { text: '已完成', className: 'status-completed' },
   cancelled: { text: '已取消', className: 'status-cancelled' },
+};
+
+const statusChangeMessages: Record<OrderStatus, string> = {
+  pending: '订单状态已更新，请刷新后重试',
+  'in-progress': '阿姨已接单，无法取消',
+  completed: '订单已完成，无法取消',
+  cancelled: '订单已取消',
 };
 
 const cancelReasons = [
@@ -28,6 +35,8 @@ export default function MyOrders() {
   const [cancellingOrder, setCancellingOrder] = useState<Order | null>(null);
   const [selectedReason, setSelectedReason] = useState('');
   const [customReason, setCustomReason] = useState('');
+  const [alertOpen, setAlertOpen] = useState(false);
+  const [alertMessage, setAlertMessage] = useState('');
 
   void tick;
   const refresh = () => setTick((t) => t + 1);
@@ -46,8 +55,28 @@ export default function MyOrders() {
     { key: 'cancelled', label: '已取消' },
   ];
 
+  const showAlert = (message: string) => {
+    setAlertMessage(message);
+    setAlertOpen(true);
+  };
+
+  const closeAlert = () => {
+    setAlertOpen(false);
+    setAlertMessage('');
+    refresh();
+  };
+
   const openCancelModal = (order: Order) => {
-    setCancellingOrder(order);
+    const latestOrder = getOrderById(order.id);
+    if (!latestOrder) {
+      showAlert('订单不存在');
+      return;
+    }
+    if (latestOrder.status !== 'pending') {
+      showAlert(statusChangeMessages[latestOrder.status]);
+      return;
+    }
+    setCancellingOrder(latestOrder);
     setSelectedReason('');
     setCustomReason('');
     setCancelModalOpen(true);
@@ -62,6 +91,19 @@ export default function MyOrders() {
 
   const handleConfirmCancel = () => {
     if (!cancellingOrder) return;
+
+    const latestOrder = getOrderById(cancellingOrder.id);
+    if (!latestOrder) {
+      closeCancelModal();
+      showAlert('订单不存在');
+      return;
+    }
+    if (latestOrder.status !== 'pending') {
+      closeCancelModal();
+      showAlert(statusChangeMessages[latestOrder.status]);
+      return;
+    }
+
     const reason = selectedReason === '其他原因' ? customReason.trim() : selectedReason;
     if (!reason) return;
 
@@ -209,6 +251,20 @@ export default function MyOrders() {
                 确认取消
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {alertOpen && (
+        <div className="modal-overlay" onClick={closeAlert}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 360 }}>
+            <div style={{ textAlign: 'center', padding: '10px 0 20px' }}>
+              <div style={{ fontSize: 48, marginBottom: 12 }}>⚠️</div>
+              <div style={{ fontSize: 16, color: 'var(--text)', lineHeight: 1.6 }}>{alertMessage}</div>
+            </div>
+            <button className="btn btn-primary btn-block" onClick={closeAlert}>
+              我知道了
+            </button>
           </div>
         </div>
       )}

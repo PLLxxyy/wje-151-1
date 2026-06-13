@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getOrders, updateOrder } from '../utils/storage';
+import { getOrders, updateOrder, getOrderById } from '../utils/storage';
 import { Order, OrderStatus } from '../types';
 
 const statusLabels: Record<OrderStatus, { text: string; className: string }> = {
@@ -10,12 +10,24 @@ const statusLabels: Record<OrderStatus, { text: string; className: string }> = {
   cancelled: { text: '已取消', className: 'status-cancelled' },
 };
 
+const auntStatusChangeMessages: Record<string, string> = {
+  'pending-pending': '订单状态已更新，请刷新后重试',
+  'pending-in-progress': '订单已被其他阿姨接单',
+  'pending-completed': '订单已完成',
+  'pending-cancelled': '用户已取消订单',
+  'in-progress-in-progress': '订单状态已更新，请刷新后重试',
+  'in-progress-completed': '订单已完成',
+  'in-progress-cancelled': '订单已取消',
+};
+
 type TabKey = 'pending' | 'in-progress' | 'completed' | 'cancelled';
 
 export default function AuntDashboard() {
   const navigate = useNavigate();
   const [tab, setTab] = useState<TabKey>('pending');
   const [tick, setTick] = useState(0);
+  const [alertOpen, setAlertOpen] = useState(false);
+  const [alertMessage, setAlertMessage] = useState('');
 
   const allOrders = getOrders().sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   void tick;
@@ -23,13 +35,44 @@ export default function AuntDashboard() {
 
   const refresh = () => setTick((t) => t + 1);
 
+  const showAlert = (message: string) => {
+    setAlertMessage(message);
+    setAlertOpen(true);
+  };
+
+  const closeAlert = () => {
+    setAlertOpen(false);
+    setAlertMessage('');
+    refresh();
+  };
+
   const handleAccept = (order: Order) => {
+    const latestOrder = getOrderById(order.id);
+    if (!latestOrder) {
+      showAlert('订单不存在');
+      return;
+    }
+    if (latestOrder.status !== 'pending') {
+      const key = `pending-${latestOrder.status}`;
+      showAlert(auntStatusChangeMessages[key] || '订单状态已变更，无法接单');
+      return;
+    }
     updateOrder(order.id, { status: 'in-progress' });
     refresh();
     setTab('in-progress');
   };
 
   const handleComplete = (order: Order) => {
+    const latestOrder = getOrderById(order.id);
+    if (!latestOrder) {
+      showAlert('订单不存在');
+      return;
+    }
+    if (latestOrder.status !== 'in-progress') {
+      const key = `in-progress-${latestOrder.status}`;
+      showAlert(auntStatusChangeMessages[key] || '订单状态已变更，无法完成');
+      return;
+    }
     updateOrder(order.id, { status: 'completed' });
     refresh();
     setTab('completed');
@@ -152,6 +195,20 @@ export default function AuntDashboard() {
           })
         )}
       </div>
+
+      {alertOpen && (
+        <div className="modal-overlay" onClick={closeAlert}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 360 }}>
+            <div style={{ textAlign: 'center', padding: '10px 0 20px' }}>
+              <div style={{ fontSize: 48, marginBottom: 12 }}>⚠️</div>
+              <div style={{ fontSize: 16, color: 'var(--text)', lineHeight: 1.6 }}>{alertMessage}</div>
+            </div>
+            <button className="btn btn-primary btn-block" onClick={closeAlert}>
+              我知道了
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
